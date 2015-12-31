@@ -15,16 +15,18 @@ class GenerateCommand extends Command
     /**
      * @var GeneratorInterface
      */
-    private $cg;
+    private $g;
 
     /**
      * GenerateCommand constructor.
      * @param GeneratorInterface $configurationGenerator
      */
-    public function __construct(GeneratorInterface $configurationGenerator)
+    public function __construct(
+        GeneratorInterface $configurationGenerator
+    )
     {
         parent::__construct();
-        $this->cg = $configurationGenerator;
+        $this->g = $configurationGenerator;
     }
 
     protected function configure()
@@ -40,7 +42,7 @@ class GenerateCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         try {
-            $info = $this->cg->generate();
+            $info = $this->g->generate();
             if ($info) {
                 $this->outputInfo($output, $info);
             } else {
@@ -57,7 +59,7 @@ class GenerateCommand extends Command
      */
     private function outputInfo(OutputInterface $output, array $info)
     {
-        array_map(function ($line) use ($info, $output) {
+        array_map(function ($k, $line) use ($info, $output) {
             $output->writeln(sprintf('<info>%s</info>', $line));
         }, array_keys($info), $info);
     }
