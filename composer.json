@@ -1,0 +1,28 @@
+{
+    "name": "corestore/mage2-configgen",
+    "require": {
+        "php": "~5.5.0|~5.6.0",
+        "magento/framework": "*",
+        "magento/magento-composer-installer": "*"
+    },
+    "type": "magento2-module",
+    "version": "0.1.0",
+    "license": [
+        "BSD"
+    ],
+    "extra": {
+        "map": [
+            [
+                "*",
+                "CoreStore/ConfigGen"
+            ]
+        ]
+    },
+    "authors": [
+        {
+            "name": "Cyrill Schumacher",
+            "homepage": "https://corestore.io/",
+            "role": "Developer"
+        }
+    ]
+}
