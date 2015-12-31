@@ -1,23 +1,24 @@
 {
     "name": "corestore/mage2-configgen",
+    "description": "N/A",
     "require": {
-        "php": "~5.5.0|~5.6.0",
-        "magento/framework": "*",
-        "magento/magento-composer-installer": "*"
+        "php": "~5.5.0|~5.6.0|~7.0.0",
+        "magento/framework": "*"
+    },
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "CoreStore\\ConfigGen\\": ""
+        }
     },
     "type": "magento2-module",
-    "version": "0.1.0",
+    "version": "0.0.1",
     "license": [
-        "BSD"
+        "OSL-3.0",
+        "AFL-3.0"
     ],
-    "extra": {
-        "map": [
-            [
-                "*",
-                "CoreStore/ConfigGen"
-            ]
-        ]
-    },
     "authors": [
         {
             "name": "Cyrill Schumacher",

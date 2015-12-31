@@ -2,4 +2,4 @@
 
 use Magento\Framework\Component\ComponentRegistrar;
 
-ComponentRegistrar::register(ComponentRegistrar::MODULE, 'Mage2_ConfigGen', __DIR__);
+ComponentRegistrar::register(ComponentRegistrar::MODULE, 'CoreStore_ConfigGen', __DIR__);
