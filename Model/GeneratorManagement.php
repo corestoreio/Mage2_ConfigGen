@@ -438,7 +438,7 @@ class GeneratorManagement implements GeneratorInterface
             $model = 'NewStringCSV';
         }
 
-        $ret[] = 'var Path' . $this->snakeCaseToUpperCamelCase($pathUnderScore) . ' = model.' . $model . '(`' . $path . '`)';
+        $ret[] = 'var Path' . $this->snakeCaseToUpperCamelCase($pathUnderScore) . ' = model.' . $model . '(`' . $path . '`, model.WithPkgCfg(PackageConfiguration))';
 
         return $this->myImplode($ret);
     }
