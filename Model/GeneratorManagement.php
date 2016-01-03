@@ -8,6 +8,8 @@ class GeneratorManagement implements GeneratorInterface
 {
     const SCOPE = 'adminhtml';
 
+    const OUT_DIR = 'zcode';
+
     /**
      * Object manager
      *
@@ -33,14 +35,15 @@ class GeneratorManagement implements GeneratorInterface
     {
         $ret = [];
 
-        @mkdir('zcode', 0700);
+        @rmdir(self::OUT_DIR);
+        @mkdir(self::OUT_DIR, 0700);
 
         foreach (glob("app/code/Magento/*/etc/adminhtml/system.xml") as $systemXML) {
             $module = preg_replace('(app/code/Magento/(.*)/etc/adminhtml/system.xml)', '$1', $systemXML);
             $ret[] = "Writing $module";
             $xml = simplexml_load_file($systemXML);
             $sections = [];
-            $pathVariables = [];
+            $pathFieldsInit = $pathTypeComment = [];
             $moduleDefaultConfig = $this->getDefaultConfig(str_replace('adminhtml/system.xml', 'config.xml', $systemXML));
             $moduleDefaultConfigFlat = $this->getDefaultConfigFlat($moduleDefaultConfig);
 
@@ -68,13 +71,17 @@ class GeneratorManagement implements GeneratorInterface
                                 $moduleDefaultConfig,
                                 $moduleDefaultConfigFlat
                             );
-                            $pathVariables[] = $this->pathVarFromField(
+                            $pathTypeComment[] = $this->pathTypeComment(
                                 $field,
                                 $module,
                                 $section->attributes()->id,
-                                $group->attributes()->id,
-                                $moduleDefaultConfig,
-                                $moduleDefaultConfigFlat
+                                $group->attributes()->id
+                            );
+                            $pathFieldsInit[] = $this->pathFieldInit(
+                                $field,
+                                $module,
+                                $section->attributes()->id,
+                                $group->attributes()->id
                             );
                         }
                         $tplGroup = str_replace('{{fields}}', implode("\n", $fields), $tplGroup);
@@ -105,40 +112,9 @@ class GeneratorManagement implements GeneratorInterface
                 $sections[] = $tplSection;
             }
 
-            $all = implode('', $sections);
-            $sm = strtolower($module);
-            file_put_contents('zcode/config_' . $sm . '.go', '
-        // +build ignore
+            $this->writePkgCfg(strtolower($module), implode('', $sections));
+            $this->writePath(strtolower($module), $pathTypeComment, $pathFieldsInit);
 
-        package ' . $sm . '
-
-        import (
-            "github.com/corestoreio/csfw/config/element"
-            "github.com/corestoreio/csfw/store/scope"
-        )
-
-        // PackageConfiguration global configuration options for this package.
-        // Used in frontend and backend. See init() for details.
-        var PackageConfiguration   element.SectionSlice
-
-        func init(){
-            PackageConfiguration = element.MustNewConfiguration(' . "\n$all" . ')
-        }
-            ');
-
-            if (count($pathVariables) > 0) {
-                file_put_contents("zcode/config_{$sm}_path.go", '
-        // +build ignore
-
-        package ' . $sm . '
-
-        import (
-            "github.com/corestoreio/csfw/config/model"
-        )
-
-        ' . implode("\n", $pathVariables)
-                );
-            }
 
         }
         return $ret;
@@ -200,7 +176,7 @@ class GeneratorManagement implements GeneratorInterface
             $default = "`$default`";
         }
 
-        $path = $pathOrg = $sectionID . '/' . $groupID . '/' . $fieldID;
+        $path = $sectionID . '/' . $groupID . '/' . $fieldID;
 
         $ret = ['&element.Field{'];
         $ret[] = sprintf('// Path: %s', $path);
@@ -227,10 +203,8 @@ class GeneratorManagement implements GeneratorInterface
             $sourceModel .= $f->source_model;
         }
 
-        $path = $pathOrg = $sID . '/' . $gID . '/' . $f->attributes()->id;
-        if (trim($f->config_path) !== '') {
-            $path = $f->config_path;
-        }
+        $pathOrg = $sID . '/' . $gID . '/' . $f->attributes()->id;
+        $path = $this->getPath($f, $sID, $gID);
 
         if (isset($moduleDefaultConfig[(string)$sID])) {
             $sec = @$moduleDefaultConfig[(string)$sID];
@@ -278,7 +252,7 @@ class GeneratorManagement implements GeneratorInterface
             $ret[] = sprintf('Label:   `%s`,', $f->label);
         }
         if ('' !== trim($f->comment)) {
-            $ret[] = sprintf('Comment: element.LongText(`%s`),',$this-> flattenString($f->comment));
+            $ret[] = sprintf('Comment: element.LongText(`%s`),', $this->flattenString($f->comment));
         }
         if ('' !== trim($f->tooltip)) {
             $ret[] = sprintf('Tooltip: element.LongText(`%s`),', $this->flattenString($f->tooltip));
@@ -396,8 +370,57 @@ class GeneratorManagement implements GeneratorInterface
         );
     }
 
+    private function writePkgCfg($pkg, $data)
+    {
+        file_put_contents(self::OUT_DIR . '/config_' . $pkg . '.go', '
+        // +build ignore
 
-    private function pathVarFromField(\SimpleXMLElement $f, $module, $sID, $gID, array $moduleDefaultConfig, array &$moduleDefaultConfigFlat)
+        package ' . $pkg . '
+
+        import (
+            "github.com/corestoreio/csfw/config/element"
+            "github.com/corestoreio/csfw/store/scope"
+        )
+
+        // PackageConfiguration global configuration options for this package.
+        // Used in frontend and backend. See init() for details.
+        var PackageConfiguration   element.SectionSlice
+
+        func init(){
+            PackageConfiguration = element.MustNewConfiguration(' . "\n$data" . ')
+            Path = NewPath(PackageConfiguration)
+        }
+        ');
+    }
+
+    private function pathFieldInit(\SimpleXMLElement $f, $module, $sID, $gID)
+    {
+
+        $sourceModel = '';
+
+        if ($f->source_model) {
+            $sourceModel = $f->source_model;
+        }
+
+        $path = $this->getPath($f, $sID, $gID);
+        $pathUnderScore = str_replace('/', '_', $path);
+        $ret = [];
+
+
+        $model = 'NewStr';
+        $type = trim($f->attributes()->type);
+        if ($type === 'select' && (strpos($sourceModel, 'esno') !== false || strpos($sourceModel, 'nabledisa') !== false)) {
+            $model = 'NewBool';
+        } elseif ($type === 'multiselect') {
+            $model = 'NewStringCSV';
+        }
+
+        $ret[] = 'pp.' . $this->snakeToUCamel($pathUnderScore) . ' = model.' . $model . '(`' . $path . '`, model.WithPkgCfg(pkgCfg))';
+
+        return $this->myImplode($ret);
+    }
+
+    private function pathTypeComment(\SimpleXMLElement $f, $module, $sID, $gID)
     {
 
         $backendModel = '';
@@ -410,19 +433,17 @@ class GeneratorManagement implements GeneratorInterface
             $sourceModel .= $f->source_model;
         }
 
-        $path = $pathOrg = $sID . '/' . $gID . '/' . $f->attributes()->id;
-        if (trim($f->config_path) !== '') {
-            $path = $f->config_path;
-        }
+        $path = $this->getPath($f, $sID, $gID);
         $pathUnderScore = str_replace('/', '_', $path);
         $ret = [];
-        $ret[] = '// Path' . $this->snakeCaseToUpperCamelCase($pathUnderScore) . ' => ' . $this->flattenString($f->label) . '.';
+        $ret[] = '// ' . $this->snakeToUCamel($pathUnderScore) . ' => ' . $this->flattenString($f->label) . '.';
         $comment = $this->flattenString($f->comment);
         if ($comment !== '') {
             foreach ($this->filterComment($comment) as $c) {
                 $ret[] = '// ' . $c;
             }
         }
+        $ret[] = '// Path: ' . $path;
         if (false === empty($backendModel)) {
             $ret[] = sprintf('// BackendModel: %s', $backendModel);
         }
@@ -430,17 +451,66 @@ class GeneratorManagement implements GeneratorInterface
             $ret[] = sprintf('// SourceModel: %s', $sourceModel);
         }
 
-        $model = 'NewStr';
+        $model = 'Str';
         $type = trim($f->attributes()->type);
         if ($type === 'select' && (strpos($sourceModel, 'esno') !== false || strpos($sourceModel, 'nabledisa') !== false)) {
-            $model = 'NewBool';
+            $model = 'Bool';
         } elseif ($type === 'multiselect') {
-            $model = 'NewStringCSV';
+            $model = 'StringCSV';
         }
 
-        $ret[] = 'var Path' . $this->snakeCaseToUpperCamelCase($pathUnderScore) . ' = model.' . $model . '(`' . $path . '`, model.WithPkgCfg(PackageConfiguration))';
+        $ret[] = $this->snakeToUCamel($pathUnderScore) . '  model.' . $model;
 
         return $this->myImplode($ret);
+    }
+
+    private function writePath($pkg, array $pathTypeComment, array $pathFieldsInit)
+    {
+        if (count($pathTypeComment) < 1) {
+            return;
+        }
+        file_put_contents(self::OUT_DIR . "/config_{$pkg}_path.go", '
+    // +build ignore
+
+    package ' . $pkg . '
+
+    import (
+        "github.com/corestoreio/csfw/config/model"
+        "github.com/corestoreio/csfw/config/element"
+    )
+
+    // Path will be initialized in the init() function together with PackageConfiguration.
+    var Path *PkgPath
+
+    // PkgPath global configuration struct containing paths and how to retrieve
+    // their values and options.
+    type PkgPath struct {
+        model.PkgPath
+        ' . implode("\n", $pathTypeComment) . '
+    }
+
+    // NewPath initializes the global Path variable. See init()
+    func NewPath(pkgCfg element.SectionSlice) *PkgPath {
+        return (&PkgPath{}).init(pkgCfg)
+    }
+
+    func (pp *PkgPath) init(pkgCfg element.SectionSlice) *PkgPath {
+        pp.Lock()
+        defer pp.Unlock()
+        ' . implode('', $pathFieldsInit) . '
+        return pp
+    }
+
+    ');
+    }
+
+    private function getPath(\SimpleXMLElement $f, $sID, $gID)
+    {
+        $path = $sID . '/' . $gID . '/' . $f->attributes()->id;
+        if (trim($f->config_path) !== '') {
+            $path = $f->config_path;
+        }
+        return $path;
     }
 
     private function scope(\SimpleXMLElement $s)
@@ -480,8 +550,8 @@ class GeneratorManagement implements GeneratorInterface
         return str_replace('Magento', 'Otnegam', $str);
     }
 
-    private function snakeCaseToUpperCamelCase($input)
+    private function snakeToUCamel($input)
     {
-        return str_replace(' ', '', ucwords(str_replace('_', ' ', $input)));
+        return \Magento\Framework\Api\SimpleDataObjectConverter::snakeCaseToUpperCamelCase($input);
     }
 }
