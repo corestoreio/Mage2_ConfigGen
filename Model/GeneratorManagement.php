@@ -382,13 +382,13 @@ class GeneratorManagement implements GeneratorInterface
             "github.com/corestoreio/csfw/store/scope"
         )
 
-        // PackageConfiguration global configuration options for this package.
+        // ConfigStructure global configuration structure for this package.
         // Used in frontend and backend. See init() for details.
-        var PackageConfiguration   element.SectionSlice
+        var ConfigStructure   element.SectionSlice
 
         func init(){
-            PackageConfiguration = element.MustNewConfiguration(' . "\n$data" . ')
-            Path = NewPath(PackageConfiguration)
+            ConfigStructure = element.MustNewConfiguration(' . "\n$data" . ')
+            Backend = NewBackend(ConfigStructure)
         }
         ');
     }
@@ -415,7 +415,7 @@ class GeneratorManagement implements GeneratorInterface
             $model = 'NewStringCSV';
         }
 
-        $ret[] = 'pp.' . $this->snakeToUCamel($pathUnderScore) . ' = model.' . $model . '(`' . $path . '`, model.WithPkgCfg(pkgCfg))';
+        $ret[] = 'pp.' . $this->snakeToUCamel($pathUnderScore) . ' = model.' . $model . '(`' . $path . '`, model.WithConfigStructure(cfgStruct))';
 
         return $this->myImplode($ret);
     }
@@ -469,7 +469,7 @@ class GeneratorManagement implements GeneratorInterface
         if (count($pathTypeComment) < 1) {
             return;
         }
-        file_put_contents(self::OUT_DIR . "/config_{$pkg}_path.go", '
+        file_put_contents(self::OUT_DIR . "/config_{$pkg}_backend.go", '
     // +build ignore
 
     package ' . $pkg . '
@@ -479,22 +479,23 @@ class GeneratorManagement implements GeneratorInterface
         "github.com/corestoreio/csfw/config/element"
     )
 
-    // Path will be initialized in the init() function together with PackageConfiguration.
-    var Path *PkgPath
+    // Backend will be initialized in the init() function together with ConfigStructure.
+    var Backend *PkgBackend
 
-    // PkgPath global configuration struct containing paths and how to retrieve
-    // their values and options.
-    type PkgPath struct {
-        model.PkgPath
+    // PkgBackend just exported for the sake of documentation. See fields
+    // for more information. The PkgBackend handles the reading and writing
+    // of configuration values within this package.
+    type PkgBackend struct {
+        model.PkgBackend
         ' . implode("\n", $pathTypeComment) . '
     }
 
-    // NewPath initializes the global Path variable. See init()
-    func NewPath(pkgCfg element.SectionSlice) *PkgPath {
-        return (&PkgPath{}).init(pkgCfg)
+    // NewBackend initializes the global Backend variable. See init()
+    func NewBackend(cfgStruct element.SectionSlice) *PkgBackend {
+        return (&PkgBackend{}).init(cfgStruct)
     }
 
-    func (pp *PkgPath) init(pkgCfg element.SectionSlice) *PkgPath {
+    func (pp *PkgBackend) init(cfgStruct element.SectionSlice) *PkgBackend {
         pp.Lock()
         defer pp.Unlock()
         ' . implode('', $pathFieldsInit) . '
