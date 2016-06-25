@@ -382,14 +382,16 @@ class GeneratorManagement implements GeneratorInterface
             "github.com/corestoreio/csfw/store/scope"
         )
 
+        // todo(CS) refactor, dont use globals
+
         // ConfigStructure global configuration structure for this package.
         // Used in frontend and backend. See init() for details.
-        var ConfigStructure   element.SectionSlice
+        // var ConfigStructure   element.SectionSlice
 
-        func init(){
-            ConfigStructure = element.MustNewConfiguration(' . "\n$data" . ')
-            Backend = NewBackend(ConfigStructure)
-        }
+        // func init(){
+        //    ConfigStructure = element.MustNewConfiguration(' . "\n$data" . ')
+        //    Backend = NewBackend(ConfigStructure)
+        //}
         ');
     }
 
@@ -479,23 +481,20 @@ class GeneratorManagement implements GeneratorInterface
         "github.com/corestoreio/csfw/config/element"
     )
 
-    // Backend will be initialized in the init() function together with ConfigStructure.
-    var Backend *PkgBackend
-
-    // PkgBackend just exported for the sake of documentation. See fields
-    // for more information. The PkgBackend handles the reading and writing
+    // Backend just exported for the sake of documentation. See fields
+    // for more information. The Backend handles the reading and writing
     // of configuration values within this package.
-    type PkgBackend struct {
-        model.PkgBackend
+    type Backend struct {
+        model.Backend
         ' . implode("\n", $pathTypeComment) . '
     }
 
-    // NewBackend initializes the global Backend variable. See init()
-    func NewBackend(cfgStruct element.SectionSlice) *PkgBackend {
-        return (&PkgBackend{}).init(cfgStruct)
+    // New initializes the global Backend variable. See init()
+    func New(cfgStruct element.SectionSlice) *Backend {
+        return (&Backend{}).init(cfgStruct)
     }
 
-    func (pp *PkgBackend) init(cfgStruct element.SectionSlice) *PkgBackend {
+    func (pp *Backend) init(cfgStruct element.SectionSlice) *Backend {
         pp.Lock()
         defer pp.Unlock()
         ' . implode('', $pathFieldsInit) . '
